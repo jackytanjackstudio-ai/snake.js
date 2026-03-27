@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add .)"
+      "Bash(git add .)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd mobile-friendly controls and responsive design\n\nFeatures:\n- Touch control buttons for mobile devices\n- Swipe gestures on canvas\n- Responsive canvas that scales on mobile\n- Optimized layout for phone screens\n- Prevent zoom and improve touch handling\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push)",
+      "WebFetch(domain:snake-js-lovat-beta.vercel.app)",
+      "Bash(curl -s https://snake-js-lovat-beta.vercel.app/)",
+      "WebSearch",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd premium game juice effects and power-up system\n\nPhase 1 Features:\n- Particle explosion system with physics\n- Screen shake effects on impacts and eating\n- Score popup animations (+10 floating text)\n- Power-up system: Shield, Ghost, Speed, Magnet\n- Pulsing food and power-ups with glow effects\n- Visual indicators for active power-ups\n- Ghost mode allows passing through walls\n- Shield protects from collisions\n- Enhanced visual feedback throughout\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []
