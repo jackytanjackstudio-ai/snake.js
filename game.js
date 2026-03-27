@@ -1155,3 +1155,147 @@ function handleSwipe() {
         }
     }
 }
+
+// Leaderboard API Integration
+const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:3000/api'
+    : '/api'; // Use relative path for production
+
+const leaderboardScreen = document.getElementById('leaderboardScreen');
+const leaderboardContent = document.getElementById('leaderboardContent');
+const viewLeaderboardBtn = document.getElementById('viewLeaderboard');
+const closeLeaderboardBtn = document.getElementById('closeLeaderboard');
+
+let currentLeaderboardMode = 'global';
+
+// View leaderboard button
+viewLeaderboardBtn.addEventListener('click', () => {
+    modeSelection.style.display = 'none';
+    leaderboardScreen.style.display = 'block';
+    loadLeaderboard(currentLeaderboardMode);
+});
+
+// Close leaderboard
+closeLeaderboardBtn.addEventListener('click', () => {
+    leaderboardScreen.style.display = 'none';
+    modeSelection.style.display = 'block';
+});
+
+// Leaderboard tabs
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        currentLeaderboardMode = btn.dataset.lbMode;
+
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        loadLeaderboard(currentLeaderboardMode);
+    });
+});
+
+// Load leaderboard from API
+async function loadLeaderboard(mode) {
+    leaderboardContent.innerHTML = '<div class="loading">Loading...</div>';
+
+    try {
+        const response = await fetch(`${API_URL}/leaderboard/${mode}`);
+        const data = await response.json();
+
+        displayLeaderboard(data.leaderboard);
+    } catch (error) {
+        leaderboardContent.innerHTML = '<div class="loading">❌ Unable to load leaderboard<br>Server may be offline</div>';
+        console.error('Leaderboard error:', error);
+    }
+}
+
+// Display leaderboard
+function displayLeaderboard(entries) {
+    if (!entries || entries.length === 0) {
+        leaderboardContent.innerHTML = '<div class="loading">No scores yet. Be the first!</div>';
+        return;
+    }
+
+    const html = entries.map((entry, index) => {
+        const rank = index + 1;
+        const isTop3 = rank <= 3;
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+
+        return `
+            <div class="leaderboard-entry ${isTop3 ? 'top3' : ''}">
+                <div class="leaderboard-rank">${medal} #${rank}</div>
+                <div class="leaderboard-name">${escapeHtml(entry.playerName)}</div>
+                <div class="leaderboard-score">${entry.score}</div>
+            </div>
+        `;
+    }).join('');
+
+    leaderboardContent.innerHTML = html;
+}
+
+// Submit score to leaderboard
+async function submitScore(playerName, finalScore, mode) {
+    try {
+        const response = await fetch(`${API_URL}/score`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                playerName,
+                score: finalScore,
+                mode,
+                achievements: Object.keys(achievements).length,
+                stats: {
+                    combo: stats.bestCombo,
+                    longestSnake: stats.longestSnake
+                }
+            })
+        });
+
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Submit score error:', error);
+        return null;
+    }
+}
+
+// Update game over to prompt for name and submit score
+const originalGameOver = gameOver;
+gameOver = async function() {
+    gameRunning = false;
+    clearInterval(gameLoop);
+    startBtn.textContent = 'Restart Game';
+
+    // Update stats
+    stats.totalGames++;
+    stats.totalScore += score;
+    stats.totalDeaths++;
+    localStorage.setItem('snakeStats', JSON.stringify(stats));
+
+    // Prompt for name if score is good
+    let playerName = localStorage.getItem('playerName') || '';
+
+    if (score > 50) {
+        playerName = prompt('🎉 Great score! Enter your name for the leaderboard:', playerName) || 'Anonymous';
+        localStorage.setItem('playerName', playerName);
+
+        // Submit to leaderboard
+        const result = await submitScore(playerName, score, currentMode);
+
+        if (result && result.success) {
+            alert(`Game Over!\nScore: ${score}\nRank: #${result.rank} in ${currentMode}\nGlobal Rank: #${result.globalRank}\n\nAchievements: ${Object.keys(achievements).length}/${Object.keys(achievementsList).length}`);
+        } else {
+            alert(`Game Over!\nScore: ${score}\nHigh Score: ${highScore}\n\nAchievements: ${Object.keys(achievements).length}/${Object.keys(achievementsList).length}`);
+        }
+    } else {
+        alert(`Game Over!\nScore: ${score}\nHigh Score: ${highScore}\n\nAchievements: ${Object.keys(achievements).length}/${Object.keys(achievementsList).length}`);
+    }
+};
+
+// Utility function
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}

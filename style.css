@@ -238,6 +238,108 @@ h2 {
     to { opacity: 1; transform: scale(1); }
 }
 
+/* Leaderboard */
+.view-leaderboard-btn {
+    background: linear-gradient(135deg, #ffd700 0%, #ffaa00 100%);
+    color: #333;
+    border: none;
+    padding: 12px 25px;
+    font-size: 1.1em;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-bottom: 20px;
+    transition: transform 0.2s;
+}
+
+.view-leaderboard-btn:hover {
+    transform: translateY(-2px);
+}
+
+.leaderboard-screen {
+    animation: fadeIn 0.3s ease-in;
+}
+
+.leaderboard-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.tab-btn {
+    padding: 10px 20px;
+    border: 2px solid #ddd;
+    background: white;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: bold;
+}
+
+.tab-btn:hover {
+    background: #f0f0f0;
+}
+
+.tab-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-color: #667eea;
+}
+
+.leaderboard-content {
+    max-height: 400px;
+    overflow-y: auto;
+    background: #f9f9f9;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.leaderboard-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: white;
+    border-radius: 8px;
+    transition: transform 0.2s;
+}
+
+.leaderboard-entry:hover {
+    transform: translateX(5px);
+}
+
+.leaderboard-entry.top3 {
+    background: linear-gradient(135deg, #ffd700 0%, #ffaa00 100%);
+    font-weight: bold;
+}
+
+.leaderboard-rank {
+    font-size: 1.2em;
+    font-weight: bold;
+    min-width: 40px;
+}
+
+.leaderboard-name {
+    flex: 1;
+    font-size: 1.1em;
+}
+
+.leaderboard-score {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #667eea;
+}
+
+.loading {
+    text-align: center;
+    padding: 20px;
+    color: #999;
+}
+
 .score-board {
     display: flex;
     justify-content: space-around;

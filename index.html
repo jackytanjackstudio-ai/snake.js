@@ -43,6 +43,7 @@
         <!-- Mode Selection Screen -->
         <div id="modeSelection" class="mode-selection">
             <h2>Select Game Mode</h2>
+            <button id="viewLeaderboard" class="view-leaderboard-btn">🏆 View Leaderboard</button>
             <div class="mode-grid">
                 <button class="mode-btn" data-mode="classic">
                     <span class="mode-icon">🎮</span>
@@ -65,6 +66,22 @@
                     <span class="mode-desc">No walls, pure flow</span>
                 </button>
             </div>
+        </div>
+
+        <!-- Leaderboard Screen -->
+        <div id="leaderboardScreen" class="leaderboard-screen" style="display:none;">
+            <h2>🏆 Global Leaderboard</h2>
+            <div class="leaderboard-tabs">
+                <button class="tab-btn active" data-lb-mode="global">Global</button>
+                <button class="tab-btn" data-lb-mode="classic">Classic</button>
+                <button class="tab-btn" data-lb-mode="timeattack">Time Attack</button>
+                <button class="tab-btn" data-lb-mode="survival">Survival</button>
+                <button class="tab-btn" data-lb-mode="zen">Zen</button>
+            </div>
+            <div id="leaderboardContent" class="leaderboard-content">
+                <div class="loading">Loading...</div>
+            </div>
+            <button id="closeLeaderboard" class="close-settings-btn">Back to Menu</button>
         </div>
 
         <!-- Game Screen -->
