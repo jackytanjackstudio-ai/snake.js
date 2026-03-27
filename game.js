@@ -24,6 +24,60 @@ let combo = 0;
 let comboTimer = 0;
 let gameSpeed = 150;
 
+// Themes
+let currentTheme = localStorage.getItem('snakeTheme') || 'classic';
+const themes = {
+    classic: {
+        name: 'Classic',
+        background: '#1a1a1a',
+        grid: '#2a2a2a',
+        snake: '#00ff00',
+        snakeBody: ['#00cc00', '#009900'],
+        food: '#ff0000',
+        ui: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+    },
+    neon: {
+        name: 'Neon Cyberpunk',
+        background: '#0a0a1a',
+        grid: '#1a1a3a',
+        snake: '#00ffff',
+        snakeBody: ['#00ccff', '#0099ff'],
+        food: '#ff00ff',
+        ui: 'linear-gradient(135deg, #00ffff 0%, #ff00ff 100%)'
+    },
+    retro: {
+        name: 'Retro 8-bit',
+        background: '#0f380f',
+        grid: '#306230',
+        snake: '#8bac0f',
+        snakeBody: ['#9bbc0f', '#8bac0f'],
+        food: '#fb8b24',
+        ui: 'linear-gradient(135deg, #9bbc0f 0%, #8bac0f 100%)'
+    },
+    dark: {
+        name: 'Dark Mode',
+        background: '#000000',
+        grid: '#111111',
+        snake: '#ffffff',
+        snakeBody: ['#cccccc', '#999999'],
+        food: '#ff4444',
+        ui: 'linear-gradient(135deg, #333333 0%, #111111 100%)'
+    },
+    ocean: {
+        name: 'Ocean',
+        background: '#001f3f',
+        grid: '#003366',
+        snake: '#00d9ff',
+        snakeBody: ['#00b8d4', '#0097a7'],
+        food: '#ff6b6b',
+        ui: 'linear-gradient(135deg, #00d9ff 0%, #0097a7 100%)'
+    }
+};
+
+// Sound effects (using Web Audio API)
+let audioContext;
+let soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
+
 // Particle system
 let particles = [];
 let scorePopups = [];
@@ -167,6 +221,7 @@ function drawGame() {
             activatePowerUp(powerUp.type);
             createExplosion(powerUp.x * GRID_SIZE + GRID_SIZE / 2, powerUp.y * GRID_SIZE + GRID_SIZE / 2, powerUp.color);
             addScreenShake(3);
+            playSound('powerup');
             powerUps.splice(i, 1);
         }
     }
@@ -194,6 +249,9 @@ function drawGame() {
 
         // Add screen shake
         addScreenShake(combo > 3 ? 5 : 3);
+
+        // Play sound
+        playSound('eat');
 
         if (score > highScore) {
             highScore = score;
@@ -238,11 +296,12 @@ function drawGame() {
     // Clear canvas with screen shake
     ctx.save();
     ctx.translate(screenShake.x, screenShake.y);
-    ctx.fillStyle = '#1a1a1a';
+    const theme = themes[currentTheme];
+    ctx.fillStyle = theme.background;
     ctx.fillRect(-20, -20, canvas.width + 40, canvas.height + 40);
 
     // Draw grid
-    ctx.strokeStyle = '#2a2a2a';
+    ctx.strokeStyle = theme.grid;
     ctx.lineWidth = 1;
     for (let i = 0; i <= TILE_COUNT; i++) {
         ctx.beginPath();
@@ -258,14 +317,14 @@ function drawGame() {
 
     // Draw food with pulsing animation
     const foodPulse = Math.sin(animationFrame * 0.1) * 2;
-    ctx.fillStyle = '#ff0000';
+    ctx.fillStyle = theme.food;
     ctx.beginPath();
     ctx.arc(food.x * GRID_SIZE + GRID_SIZE / 2, food.y * GRID_SIZE + GRID_SIZE / 2, GRID_SIZE / 2 - 2 + foodPulse, 0, Math.PI * 2);
     ctx.fill();
 
     // Draw glow around food
     ctx.shadowBlur = 10;
-    ctx.shadowColor = '#ff0000';
+    ctx.shadowColor = theme.food;
     ctx.beginPath();
     ctx.arc(food.x * GRID_SIZE + GRID_SIZE / 2, food.y * GRID_SIZE + GRID_SIZE / 2, GRID_SIZE / 2 - 2 + foodPulse, 0, Math.PI * 2);
     ctx.fill();
@@ -294,7 +353,7 @@ function drawGame() {
     snake.forEach((segment, index) => {
         if (index === 0) {
             // Draw head with eyes
-            let headColor = '#00ff00';
+            let headColor = theme.snake;
             if (activePowerUps.shield > 0) headColor = '#00ffff';
             if (activePowerUps.ghost > 0) headColor = '#9966ff';
 
@@ -375,14 +434,16 @@ function drawGame() {
                 segment.x * GRID_SIZE + GRID_SIZE,
                 segment.y * GRID_SIZE + GRID_SIZE
             );
-            gradient.addColorStop(0, '#00cc00');
-            gradient.addColorStop(1, '#009900');
+            gradient.addColorStop(0, theme.snakeBody[0]);
+            gradient.addColorStop(1, theme.snakeBody[1]);
             ctx.fillStyle = gradient;
             ctx.fillRect(segment.x * GRID_SIZE + 1, segment.y * GRID_SIZE + 1, GRID_SIZE - 2, GRID_SIZE - 2);
 
-            // Add scale pattern
-            ctx.fillStyle = '#00aa00';
+            // Add scale pattern (slightly darker)
+            ctx.fillStyle = theme.snakeBody[1];
+            ctx.globalAlpha = 0.7;
             ctx.fillRect(segment.x * GRID_SIZE + 3, segment.y * GRID_SIZE + 3, GRID_SIZE - 6, GRID_SIZE - 6);
+            ctx.globalAlpha = 1.0;
         }
     });
 
@@ -494,6 +555,7 @@ function placeFood() {
 function handleCollision() {
     createExplosion(snake[0].x * GRID_SIZE + GRID_SIZE / 2, snake[0].y * GRID_SIZE + GRID_SIZE / 2, '#ff0000');
     addScreenShake(10);
+    playSound('death');
 
     if (currentMode === 'survival' && lives > 1) {
         // Lose a life in survival mode
@@ -638,6 +700,110 @@ backBtn.addEventListener('click', () => {
     modeSelection.style.display = 'block';
     startBtn.textContent = 'Start Game';
 });
+
+// Settings menu
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsMenu = document.getElementById('settingsMenu');
+const closeSettings = document.getElementById('closeSettings');
+const soundToggle = document.getElementById('soundToggle');
+
+settingsBtn.addEventListener('click', () => {
+    modeSelection.style.display = 'none';
+    gameScreen.style.display = 'none';
+    settingsMenu.style.display = 'block';
+
+    // Update active theme button
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.theme === currentTheme);
+    });
+
+    // Update sound toggle
+    soundToggle.checked = soundEnabled;
+});
+
+closeSettings.addEventListener('click', () => {
+    settingsMenu.style.display = 'none';
+    modeSelection.style.display = 'block';
+});
+
+// Theme selection
+document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        currentTheme = btn.dataset.theme;
+        localStorage.setItem('snakeTheme', currentTheme);
+
+        // Update active button
+        document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Update canvas background immediately
+        const theme = themes[currentTheme];
+        canvas.style.background = theme.background;
+
+        playSound('select');
+    });
+});
+
+// Sound toggle
+soundToggle.addEventListener('change', () => {
+    soundEnabled = soundToggle.checked;
+    localStorage.setItem('soundEnabled', soundEnabled);
+    if (soundEnabled) {
+        initAudio();
+        playSound('select');
+    }
+});
+
+// Sound effects using Web Audio API
+function initAudio() {
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+function playSound(type) {
+    if (!soundEnabled) return;
+
+    initAudio();
+
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    switch(type) {
+        case 'eat':
+            oscillator.frequency.value = 500;
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+            break;
+        case 'powerup':
+            oscillator.frequency.value = 800;
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.2);
+            break;
+        case 'death':
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.value = 200;
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+            break;
+        case 'select':
+            oscillator.frequency.value = 600;
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.05);
+            break;
+    }
+}
 
 // Mobile touch controls
 const upBtn = document.getElementById('upBtn');
