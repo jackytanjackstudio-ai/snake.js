@@ -1198,13 +1198,20 @@ async function loadLeaderboard(mode) {
     leaderboardContent.innerHTML = '<div class="loading">Loading...</div>';
 
     try {
+        console.log('Fetching leaderboard from:', `${API_URL}/leaderboard/${mode}`);
         const response = await fetch(`${API_URL}/leaderboard/${mode}`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
         const data = await response.json();
+        console.log('Leaderboard data:', data);
 
         displayLeaderboard(data.leaderboard);
     } catch (error) {
-        leaderboardContent.innerHTML = '<div class="loading">❌ Unable to load leaderboard<br>Server may be offline</div>';
         console.error('Leaderboard error:', error);
+        leaderboardContent.innerHTML = `<div class="loading">❌ Unable to load leaderboard<br>Error: ${error.message}<br><small>Check console for details</small></div>`;
     }
 }
 
@@ -1235,6 +1242,8 @@ function displayLeaderboard(entries) {
 // Submit score to leaderboard
 async function submitScore(playerName, finalScore, mode) {
     try {
+        console.log('Submitting score to:', `${API_URL}/score`, {playerName, score: finalScore, mode});
+
         const response = await fetch(`${API_URL}/score`, {
             method: 'POST',
             headers: {
@@ -1252,10 +1261,17 @@ async function submitScore(playerName, finalScore, mode) {
             })
         });
 
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
         const data = await response.json();
+        console.log('Score submitted successfully:', data);
         return data;
     } catch (error) {
         console.error('Submit score error:', error);
+        alert(`Failed to submit score: ${error.message}`);
         return null;
     }
 }
