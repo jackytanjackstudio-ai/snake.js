@@ -81,17 +81,75 @@ h1 {
     transform: translateY(0);
 }
 
-@media (max-width: 500px) {
+.mobile-controls {
+    display: none;
+    margin-top: 20px;
+    gap: 10px;
+}
+
+.control-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.control-btn {
+    width: 70px;
+    height: 70px;
+    font-size: 2em;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+    font-weight: bold;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.control-btn:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
     .game-container {
         padding: 15px;
+        max-width: 100%;
     }
 
     h1 {
         font-size: 1.8em;
+        margin-bottom: 15px;
+    }
+
+    .score-board {
+        font-size: 1em;
+        padding: 10px;
     }
 
     #gameCanvas {
+        max-width: 100%;
         width: 100%;
         height: auto;
+        border-width: 2px;
+    }
+
+    .mobile-controls {
+        display: block;
+    }
+
+    #startBtn {
+        width: 100%;
+        padding: 15px;
+        font-size: 1.2em;
     }
 }

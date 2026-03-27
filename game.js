@@ -222,3 +222,90 @@ document.addEventListener('keydown', (e) => {
 });
 
 startBtn.addEventListener('click', startGame);
+
+// Mobile touch controls
+const upBtn = document.getElementById('upBtn');
+const downBtn = document.getElementById('downBtn');
+const leftBtn = document.getElementById('leftBtn');
+const rightBtn = document.getElementById('rightBtn');
+
+function changeDirection(newVelocity) {
+    if (!gameRunning) return;
+
+    if (newVelocity.x !== 0 && velocity.x === 0) {
+        velocity = newVelocity;
+    } else if (newVelocity.y !== 0 && velocity.y === 0) {
+        velocity = newVelocity;
+    }
+}
+
+upBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    changeDirection({ x: 0, y: -1 });
+});
+
+downBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    changeDirection({ x: 0, y: 1 });
+});
+
+leftBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    changeDirection({ x: -1, y: 0 });
+});
+
+rightBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    changeDirection({ x: 1, y: 0 });
+});
+
+// Click events for desktop testing
+upBtn.addEventListener('click', () => changeDirection({ x: 0, y: -1 }));
+downBtn.addEventListener('click', () => changeDirection({ x: 0, y: 1 }));
+leftBtn.addEventListener('click', () => changeDirection({ x: -1, y: 0 }));
+rightBtn.addEventListener('click', () => changeDirection({ x: 1, y: 0 }));
+
+// Swipe controls for mobile
+let touchStartX = 0;
+let touchStartY = 0;
+let touchEndX = 0;
+let touchEndY = 0;
+
+canvas.addEventListener('touchstart', (e) => {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+}, false);
+
+canvas.addEventListener('touchend', (e) => {
+    if (!gameRunning) return;
+
+    touchEndX = e.changedTouches[0].screenX;
+    touchEndY = e.changedTouches[0].screenY;
+    handleSwipe();
+}, false);
+
+function handleSwipe() {
+    const deltaX = touchEndX - touchStartX;
+    const deltaY = touchEndY - touchStartY;
+    const minSwipeDistance = 30;
+
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        // Horizontal swipe
+        if (Math.abs(deltaX) > minSwipeDistance) {
+            if (deltaX > 0 && velocity.x === 0) {
+                velocity = { x: 1, y: 0 };
+            } else if (deltaX < 0 && velocity.x === 0) {
+                velocity = { x: -1, y: 0 };
+            }
+        }
+    } else {
+        // Vertical swipe
+        if (Math.abs(deltaY) > minSwipeDistance) {
+            if (deltaY > 0 && velocity.y === 0) {
+                velocity = { x: 0, y: 1 };
+            } else if (deltaY < 0 && velocity.y === 0) {
+                velocity = { x: 0, y: -1 };
+            }
+        }
+    }
+}

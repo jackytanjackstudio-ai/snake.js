@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Snake Game</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -15,8 +16,17 @@
         </div>
         <canvas id="gameCanvas" width="400" height="400"></canvas>
         <div class="controls">
-            <p>Use Arrow Keys to control the snake</p>
             <button id="startBtn">Start Game</button>
+        </div>
+        <div class="mobile-controls">
+            <div class="control-row">
+                <button class="control-btn" id="upBtn">▲</button>
+            </div>
+            <div class="control-row">
+                <button class="control-btn" id="leftBtn">◄</button>
+                <button class="control-btn" id="downBtn">▼</button>
+                <button class="control-btn" id="rightBtn">►</button>
+            </div>
         </div>
     </div>
     <script src="game.js"></script>
