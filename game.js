@@ -123,8 +123,14 @@ let activePowerUps = {
     shield: 0,
     ghost: 0,
     speed: 0,
-    magnet: 0
+    magnet: 0,
+    freeze: 0,
+    multiplier: 0
 };
+
+// Special food
+let specialFood = null;
+let specialFoodTimer = 0;
 
 // Animation
 let animationFrame = 0;
@@ -254,6 +260,19 @@ function drawGame() {
         }
     }
 
+    // Update special food timer
+    if (specialFood) {
+        specialFoodTimer--;
+        if (specialFoodTimer <= 0) {
+            specialFood = null;
+        }
+    } else {
+        // Spawn special food occasionally (10% chance every second)
+        if (Math.random() < 0.01 && score > 50) {
+            spawnSpecialFood();
+        }
+    }
+
     // Update power-ups
     for (let key in activePowerUps) {
         if (activePowerUps[key] > 0) {
@@ -305,8 +324,32 @@ function drawGame() {
         }
     }
 
+    // Check special food collision first
+    if (specialFood && head.x === specialFood.x && head.y === specialFood.y) {
+        let points = specialFood.points;
+        if (activePowerUps.multiplier > 0) points *= 2;
+
+        score += points;
+        scoreElement.textContent = score;
+
+        // Epic explosion for golden food
+        createExplosion(specialFood.x * GRID_SIZE + GRID_SIZE / 2, specialFood.y * GRID_SIZE + GRID_SIZE / 2, '#ffd700');
+        scorePopups.push(new ScorePopup(specialFood.x * GRID_SIZE + GRID_SIZE / 2, specialFood.y * GRID_SIZE + GRID_SIZE / 2, points));
+        addScreenShake(8);
+        playSound('powerup');
+
+        specialFood = null;
+        stats.totalFood++;
+        checkAchievements();
+
+        if (score > highScore) {
+            highScore = score;
+            highScoreElement.textContent = highScore;
+            localStorage.setItem('snakeHighScore_' + currentMode, highScore);
+        }
+    }
     // Check food collision
-    if (head.x === food.x && head.y === food.y) {
+    else if (head.x === food.x && head.y === food.y) {
         // Update combo
         combo++;
         comboTimer = 120; // 2 seconds to keep combo
@@ -315,8 +358,10 @@ function drawGame() {
             comboDisplay.textContent = '🔥 x' + combo + ' Combo!';
         }
 
-        // Calculate score with combo multiplier
+        // Calculate score with combo multiplier and 2x powerup
         let points = 10 * Math.min(combo, 5);
+        if (activePowerUps.multiplier > 0) points *= 2;
+
         score += points;
         scoreElement.textContent = score;
 
@@ -424,6 +469,22 @@ function drawGame() {
     ctx.arc(food.x * GRID_SIZE + GRID_SIZE / 2, food.y * GRID_SIZE + GRID_SIZE / 2, GRID_SIZE / 2 - 2 + foodPulse, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
+
+    // Draw special food (golden apple)
+    if (specialFood) {
+        const goldenPulse = Math.sin(animationFrame * 0.2) * 3;
+        ctx.fillStyle = '#ffd700';
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(specialFood.x * GRID_SIZE + GRID_SIZE / 2, specialFood.y * GRID_SIZE + GRID_SIZE / 2, GRID_SIZE / 2 + goldenPulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw crown or star icon
+        ctx.font = '16px Arial';
+        ctx.fillText('👑', specialFood.x * GRID_SIZE + GRID_SIZE / 2 - 8, specialFood.y * GRID_SIZE + GRID_SIZE / 2 + 6);
+        ctx.shadowBlur = 0;
+    }
 
     // Draw power-ups
     powerUps.forEach(powerUp => {
@@ -580,7 +641,9 @@ function spawnPowerUp() {
         { type: 'shield', color: '#00ffff', icon: '🛡' },
         { type: 'ghost', color: '#9966ff', icon: '👻' },
         { type: 'speed', color: '#ffaa00', icon: '⚡' },
-        { type: 'magnet', color: '#ff00ff', icon: '🧲' }
+        { type: 'magnet', color: '#ff00ff', icon: '🧲' },
+        { type: 'freeze', color: '#88ccff', icon: '❄️' },
+        { type: 'multiplier', color: '#ffdd00', icon: '✖️' }
     ];
 
     const powerUp = types[Math.floor(Math.random() * types.length)];
@@ -663,11 +726,29 @@ function activatePowerUp(type) {
         activePowerUps.speed = 300;
     } else if (type === 'magnet') {
         activePowerUps.magnet = 300;
+    } else if (type === 'freeze') {
+        activePowerUps.freeze = 180; // 3 seconds
+        // Freeze doesn't affect snake but slows animations
+    } else if (type === 'multiplier') {
+        activePowerUps.multiplier = 600; // 10 seconds of 2x points
     }
 
     // Track for achievements
     stats.powerupsCollected[type] = true;
     localStorage.setItem('snakeStats', JSON.stringify(stats));
+}
+
+function spawnSpecialFood() {
+    if (specialFood) return; // Already have one
+
+    specialFood = {
+        x: Math.floor(Math.random() * TILE_COUNT),
+        y: Math.floor(Math.random() * TILE_COUNT),
+        type: 'golden', // Could be golden, rainbow, etc
+        points: 30
+    };
+
+    specialFoodTimer = 600; // 10 seconds before disappearing
 }
 
 function drawPowerUpIndicators() {
@@ -693,6 +774,16 @@ function drawPowerUpIndicators() {
     if (activePowerUps.magnet > 0) {
         ctx.fillStyle = '#ff00ff';
         ctx.fillText('🧲 Magnet: ' + Math.ceil(activePowerUps.magnet / 60) + 's', 10, yOffset);
+        yOffset += 20;
+    }
+    if (activePowerUps.freeze > 0) {
+        ctx.fillStyle = '#88ccff';
+        ctx.fillText('❄️ Freeze: ' + Math.ceil(activePowerUps.freeze / 60) + 's', 10, yOffset);
+        yOffset += 20;
+    }
+    if (activePowerUps.multiplier > 0) {
+        ctx.fillStyle = '#ffdd00';
+        ctx.fillText('✖️ 2x Score: ' + Math.ceil(activePowerUps.multiplier / 60) + 's', 10, yOffset);
         yOffset += 20;
     }
 }
@@ -759,11 +850,13 @@ function startGame() {
     particles = [];
     scorePopups = [];
     powerUps = [];
-    activePowerUps = { shield: 0, ghost: 0, speed: 0, magnet: 0 };
+    activePowerUps = { shield: 0, ghost: 0, speed: 0, magnet: 0, freeze: 0, multiplier: 0 };
     screenShake = { x: 0, y: 0, intensity: 0 };
     combo = 0;
     comboTimer = 0;
     comboDisplay.style.display = 'none';
+    specialFood = null;
+    specialFoodTimer = 0;
 
     // Track mode played
     stats.modesPlayed[currentMode] = true;
