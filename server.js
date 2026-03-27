@@ -5,8 +5,20 @@ const { Pool } = require('pg');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
+// Middleware - CORS configuration for Vercel frontend
+const corsOptions = {
+    origin: [
+        'http://localhost:3000',
+        'https://snake-js-lovat-beta.vercel.app',
+        'https://snake-js-lovat-beta.vercel.app/',
+        /\.vercel\.app$/  // Allow all Vercel preview deployments
+    ],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type'],
+    credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.static('.')); // Serve static files
 
@@ -94,7 +106,10 @@ app.post('/api/score', async (req, res) => {
     try {
         const { playerName, score, mode, achievements, stats } = req.body;
 
+        console.log('📥 Score submission:', { playerName, score, mode, achievements });
+
         if (!playerName || score === undefined || !mode) {
+            console.error('❌ Missing required fields:', { playerName, score, mode });
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
@@ -137,7 +152,7 @@ app.post('/api/score', async (req, res) => {
         const totalQuery = `SELECT COUNT(*) as total FROM scores WHERE mode = $1`;
         const totalResult = await pool.query(totalQuery, [mode]);
 
-        res.json({
+        const response = {
             success: true,
             rank,
             globalRank,
@@ -151,10 +166,13 @@ app.post('/api/score', async (req, res) => {
                 stats: entry.stats,
                 timestamp: entry.timestamp
             }
-        });
+        };
+
+        console.log('✅ Score saved successfully:', response);
+        res.json(response);
     } catch (error) {
-        console.error('Error submitting score:', error);
-        res.status(500).json({ error: 'Failed to submit score' });
+        console.error('❌ Error submitting score:', error);
+        res.status(500).json({ error: 'Failed to submit score', details: error.message });
     }
 });
 
