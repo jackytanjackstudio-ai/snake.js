@@ -45,29 +45,74 @@ A premium snake game with multiplayer, leaderboards, achievements, and much more
 npm install
 ```
 
-2. Start the server:
+2. Set up PostgreSQL database:
+```bash
+# Install PostgreSQL if you haven't already
+# Create a database named 'snake_game'
+createdb snake_game
+```
+
+3. Create `.env` file from template:
+```bash
+cp .env.example .env
+# Edit .env with your database credentials
+```
+
+4. Start the server:
 ```bash
 npm start
 ```
 
-3. Open browser to:
+5. Open browser to:
 ```
 http://localhost:3000
 ```
 
-### Deployment to Vercel
+### Cloud Deployment (Render.com)
 
-1. Install Vercel CLI:
-```bash
-npm i -g vercel
-```
+#### Automatic Deployment
 
-2. Deploy:
-```bash
-vercel
-```
+1. Push your code to GitHub
 
-3. The backend API will run as Vercel serverless functions.
+2. Go to [Render.com](https://render.com) and sign up/login
+
+3. Click "New +" → "Blueprint"
+
+4. Connect your GitHub repository
+
+5. Render will automatically detect `render.yaml` and set up:
+   - PostgreSQL database (free tier)
+   - Node.js web service (free tier)
+   - Environment variables
+   - Health checks
+
+6. Click "Apply" and wait for deployment
+
+#### Manual Deployment
+
+1. Create a PostgreSQL database on Render:
+   - Go to Dashboard → New → PostgreSQL
+   - Name: `snake-game-db`
+   - Plan: Free
+   - Copy the Internal Database URL
+
+2. Create a Web Service:
+   - Go to Dashboard → New → Web Service
+   - Connect your GitHub repo
+   - Name: `snake-game-backend`
+   - Environment: Node
+   - Build Command: `npm install`
+   - Start Command: `npm start`
+   - Plan: Free
+
+3. Add Environment Variables:
+   - `NODE_ENV` = `production`
+   - `DATABASE_URL` = (paste your database URL)
+   - `ADMIN_PASSWORD` = (your secure password)
+
+4. Deploy and wait for it to go live
+
+5. Your game will be available at: `https://snake-game-backend.onrender.com`
 
 ## API Endpoints
 
@@ -98,8 +143,8 @@ Health check endpoint
 
 - **Frontend**: Vanilla JavaScript, HTML5 Canvas, CSS3
 - **Backend**: Node.js, Express
-- **Database**: JSON file storage (easily replaceable with MongoDB/PostgreSQL)
-- **Deployment**: Vercel
+- **Database**: PostgreSQL (cloud-hosted on Render.com)
+- **Deployment**: Render.com (free tier with automatic scaling)
 
 ## Credits
 

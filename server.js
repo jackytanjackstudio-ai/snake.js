@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,143 +10,212 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('.')); // Serve static files
 
-// Simple file-based database (for easy deployment)
-const DB_FILE = path.join(__dirname, 'leaderboard.json');
+// PostgreSQL connection pool
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
 
-// Initialize database if it doesn't exist
-if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify({
-        global: [],
-        classic: [],
-        timeattack: [],
-        survival: [],
-        zen: []
-    }));
-}
-
-// Helper functions
-function readDB() {
+// Initialize database tables
+async function initDB() {
     try {
-        const data = fs.readFileSync(DB_FILE, 'utf8');
-        return JSON.parse(data);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS scores (
+                id SERIAL PRIMARY KEY,
+                player_name VARCHAR(20) NOT NULL,
+                score INTEGER NOT NULL,
+                mode VARCHAR(20) NOT NULL,
+                achievements INTEGER DEFAULT 0,
+                stats JSONB,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_mode_score ON scores(mode, score DESC);
+            CREATE INDEX IF NOT EXISTS idx_global_score ON scores(score DESC);
+        `);
+        console.log('✅ Database tables initialized');
     } catch (error) {
-        return {
-            global: [],
-            classic: [],
-            timeattack: [],
-            survival: [],
-            zen: []
-        };
+        console.error('❌ Database initialization error:', error);
     }
 }
 
-function writeDB(data) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-}
+initDB();
 
 // API Routes
 
 // Get leaderboard
-app.get('/api/leaderboard/:mode?', (req, res) => {
-    const mode = req.params.mode || 'global';
-    const db = readDB();
+app.get('/api/leaderboard/:mode?', async (req, res) => {
+    try {
+        const mode = req.params.mode || 'global';
 
-    const leaderboard = db[mode] || [];
-    const top100 = leaderboard.slice(0, 100);
+        let query;
+        if (mode === 'global') {
+            query = `
+                SELECT id, player_name, score, mode, achievements, stats, timestamp
+                FROM scores
+                ORDER BY score DESC
+                LIMIT 100
+            `;
+        } else {
+            query = `
+                SELECT id, player_name, score, mode, achievements, stats, timestamp
+                FROM scores
+                WHERE mode = $1
+                ORDER BY score DESC
+                LIMIT 100
+            `;
+        }
 
-    res.json({
-        mode,
-        count: leaderboard.length,
-        leaderboard: top100
-    });
+        const result = mode === 'global'
+            ? await pool.query(query)
+            : await pool.query(query, [mode]);
+
+        res.json({
+            mode,
+            count: result.rows.length,
+            leaderboard: result.rows.map(row => ({
+                id: row.id,
+                playerName: row.player_name,
+                score: row.score,
+                mode: row.mode,
+                achievements: row.achievements,
+                stats: row.stats,
+                timestamp: row.timestamp
+            }))
+        });
+    } catch (error) {
+        console.error('Error fetching leaderboard:', error);
+        res.status(500).json({ error: 'Failed to fetch leaderboard' });
+    }
 });
 
 // Submit score
-app.post('/api/score', (req, res) => {
-    const { playerName, score, mode, achievements, stats } = req.body;
+app.post('/api/score', async (req, res) => {
+    try {
+        const { playerName, score, mode, achievements, stats } = req.body;
 
-    if (!playerName || score === undefined || !mode) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        if (!playerName || score === undefined || !mode) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // Insert score into database
+        const insertQuery = `
+            INSERT INTO scores (player_name, score, mode, achievements, stats)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, player_name, score, mode, achievements, stats, timestamp
+        `;
+
+        const result = await pool.query(insertQuery, [
+            playerName.substring(0, 20),
+            parseInt(score),
+            mode,
+            achievements || 0,
+            JSON.stringify(stats || {})
+        ]);
+
+        const entry = result.rows[0];
+
+        // Get player's rank in mode
+        const rankQuery = `
+            SELECT COUNT(*) + 1 as rank
+            FROM scores
+            WHERE mode = $1 AND score > $2
+        `;
+        const rankResult = await pool.query(rankQuery, [mode, entry.score]);
+        const rank = parseInt(rankResult.rows[0].rank);
+
+        // Get player's global rank
+        const globalRankQuery = `
+            SELECT COUNT(*) + 1 as rank
+            FROM scores
+            WHERE score > $1
+        `;
+        const globalRankResult = await pool.query(globalRankQuery, [entry.score]);
+        const globalRank = parseInt(globalRankResult.rows[0].rank);
+
+        // Get total players in mode
+        const totalQuery = `SELECT COUNT(*) as total FROM scores WHERE mode = $1`;
+        const totalResult = await pool.query(totalQuery, [mode]);
+
+        res.json({
+            success: true,
+            rank,
+            globalRank,
+            totalPlayers: parseInt(totalResult.rows[0].total),
+            entry: {
+                id: entry.id,
+                playerName: entry.player_name,
+                score: entry.score,
+                mode: entry.mode,
+                achievements: entry.achievements,
+                stats: entry.stats,
+                timestamp: entry.timestamp
+            }
+        });
+    } catch (error) {
+        console.error('Error submitting score:', error);
+        res.status(500).json({ error: 'Failed to submit score' });
     }
-
-    const db = readDB();
-
-    const entry = {
-        playerName: playerName.substring(0, 20), // Limit name length
-        score: parseInt(score),
-        mode,
-        achievements: achievements || 0,
-        stats: stats || {},
-        timestamp: new Date().toISOString(),
-        id: Date.now() + Math.random()
-    };
-
-    // Add to mode-specific leaderboard
-    if (!db[mode]) db[mode] = [];
-    db[mode].push(entry);
-    db[mode].sort((a, b) => b.score - a.score);
-    db[mode] = db[mode].slice(0, 1000); // Keep top 1000
-
-    // Add to global leaderboard
-    db.global.push(entry);
-    db.global.sort((a, b) => b.score - a.score);
-    db.global = db.global.slice(0, 1000);
-
-    writeDB(db);
-
-    // Find player's rank
-    const rank = db[mode].findIndex(e => e.id === entry.id) + 1;
-    const globalRank = db.global.findIndex(e => e.id === entry.id) + 1;
-
-    res.json({
-        success: true,
-        rank,
-        globalRank,
-        totalPlayers: db[mode].length,
-        entry
-    });
 });
 
 // Get player stats
-app.get('/api/stats', (req, res) => {
-    const db = readDB();
+app.get('/api/stats', async (req, res) => {
+    try {
+        // Get total unique players
+        const playersQuery = `SELECT COUNT(DISTINCT player_name) as total FROM scores`;
+        const playersResult = await pool.query(playersQuery);
 
-    const stats = {
-        totalPlayers: new Set([
-            ...db.global.map(e => e.playerName)
-        ]).size,
-        totalGames: db.global.length,
-        highestScore: db.global[0]?.score || 0,
-        topPlayer: db.global[0]?.playerName || 'None',
-        modeStats: {
-            classic: db.classic.length,
-            timeattack: db.timeattack.length,
-            survival: db.survival.length,
-            zen: db.zen.length
-        }
-    };
+        // Get total games
+        const gamesQuery = `SELECT COUNT(*) as total FROM scores`;
+        const gamesResult = await pool.query(gamesQuery);
 
-    res.json(stats);
+        // Get highest score and top player
+        const topQuery = `SELECT player_name, score FROM scores ORDER BY score DESC LIMIT 1`;
+        const topResult = await pool.query(topQuery);
+
+        // Get mode stats
+        const modeQuery = `
+            SELECT mode, COUNT(*) as count
+            FROM scores
+            GROUP BY mode
+        `;
+        const modeResult = await pool.query(modeQuery);
+
+        const modeStats = {};
+        modeResult.rows.forEach(row => {
+            modeStats[row.mode] = parseInt(row.count);
+        });
+
+        res.json({
+            totalPlayers: parseInt(playersResult.rows[0].total),
+            totalGames: parseInt(gamesResult.rows[0].total),
+            highestScore: topResult.rows[0]?.score || 0,
+            topPlayer: topResult.rows[0]?.player_name || 'None',
+            modeStats
+        });
+    } catch (error) {
+        console.error('Error fetching stats:', error);
+        res.status(500).json({ error: 'Failed to fetch stats' });
+    }
 });
 
 // Clear leaderboard (admin only - you can add auth later)
-app.post('/api/admin/clear', (req, res) => {
-    const { password } = req.body;
+app.post('/api/admin/clear', async (req, res) => {
+    try {
+        const { password } = req.body;
 
-    // Simple password protection
-    if (password !== 'snake2024') {
-        return res.status(403).json({ error: 'Unauthorized' });
+        // Simple password protection
+        if (password !== process.env.ADMIN_PASSWORD || !password) {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        await pool.query('DELETE FROM scores');
+
+        res.json({ success: true, message: 'Leaderboard cleared' });
+    } catch (error) {
+        console.error('Error clearing leaderboard:', error);
+        res.status(500).json({ error: 'Failed to clear leaderboard' });
     }
-
-    fs.writeFileSync(DB_FILE, JSON.stringify({
-        global: [],
-        classic: [],
-        timeattack: [],
-        survival: [],
-        zen: []
-    }));
-
-    res.json({ success: true, message: 'Leaderboard cleared' });
 });
 
 // Health check
