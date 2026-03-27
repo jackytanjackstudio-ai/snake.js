@@ -467,3 +467,87 @@ h2 {
         font-size: 1.2em;
     }
 }
+
+/* Multiplayer Lobby */
+.multiplayer-lobby {
+    animation: fadeIn 0.3s ease-in;
+}
+
+.lobby-content {
+    max-width: 500px;
+    margin: 0 auto 20px;
+}
+
+.lobby-options {
+    background: #f9f9f9;
+    padding: 30px;
+    border-radius: 15px;
+    margin-bottom: 20px;
+}
+
+.lobby-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 1.2em;
+    border-radius: 25px;
+    cursor: pointer;
+    margin: 10px 0;
+    font-weight: bold;
+    transition: transform 0.2s;
+}
+
+.lobby-btn:hover {
+    transform: translateY(-2px);
+}
+
+.or-divider {
+    text-align: center;
+    margin: 20px 0;
+    color: #999;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+#roomCodeInput {
+    width: 100%;
+    padding: 15px;
+    font-size: 1.2em;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    margin: 10px 0;
+    text-align: center;
+    text-transform: uppercase;
+    font-weight: bold;
+}
+
+#roomInfo {
+    background: #f0f0f0;
+    padding: 25px;
+    border-radius: 15px;
+    text-align: center;
+}
+
+#roomInfo h3 {
+    color: #667eea;
+    font-size: 1.8em;
+    margin-bottom: 15px;
+}
+
+#playerList {
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    margin: 15px 0;
+}
+
+.player-item {
+    padding: 10px;
+    margin: 5px 0;
+    background: #f9f9f9;
+    border-radius: 8px;
+    font-weight: bold;
+    color: #555;
+}

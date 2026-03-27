@@ -11,7 +11,7 @@ let snake = [{ x: 10, y: 10 }];
 let velocity = { x: 0, y: 0 };
 let food = { x: 15, y: 15 };
 let score = 0;
-let highScore = localStorage.getItem('snakeHighScore') || 0;
+let highScore = 0;
 let gameRunning = false;
 let gameLoop;
 
@@ -345,7 +345,6 @@ function drawGame() {
         if (score > highScore) {
             highScore = score;
             highScoreElement.textContent = highScore;
-            localStorage.setItem('snakeHighScore_' + currentMode, highScore);
         }
     }
     // Check food collision
@@ -390,7 +389,6 @@ function drawGame() {
         if (score > highScore) {
             highScore = score;
             highScoreElement.textContent = highScore;
-            localStorage.setItem('snakeHighScore_' + currentMode, highScore);
         }
 
         placeFood();
@@ -925,7 +923,7 @@ const livesDisplay = document.getElementById('livesDisplay');
 const comboDisplay = document.getElementById('comboDisplay');
 
 document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
         currentMode = btn.dataset.mode;
         modeSelection.style.display = 'none';
         gameScreen.style.display = 'block';
@@ -933,6 +931,9 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
         // Update mode display
         const modeName = btn.querySelector('.mode-name').textContent;
         modeDisplay.textContent = '🎮 ' + modeName;
+
+        // Load high score for this mode from API
+        await loadHighScore(currentMode);
 
         // Show/hide mode-specific UI
         if (currentMode === 'timeattack') {
@@ -945,10 +946,6 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
             timeDisplay.style.display = 'none';
             livesDisplay.style.display = 'none';
         }
-
-        // Load high score for this mode
-        highScore = localStorage.getItem('snakeHighScore_' + currentMode) || 0;
-        highScoreElement.textContent = highScore;
     });
 });
 
@@ -1193,6 +1190,33 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
 });
 
+// Load high score for current mode from API
+async function loadHighScore(mode) {
+    try {
+        console.log('Loading high score for mode:', mode);
+        const response = await fetch(`${API_URL}/leaderboard/${mode}`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (data.leaderboard && data.leaderboard.length > 0) {
+            highScore = data.leaderboard[0].score;
+        } else {
+            highScore = 0;
+        }
+
+        highScoreElement.textContent = highScore;
+        console.log('High score loaded:', highScore);
+    } catch (error) {
+        console.error('Load high score error:', error);
+        highScore = 0;
+        highScoreElement.textContent = 0;
+    }
+}
+
 // Load leaderboard from API
 async function loadLeaderboard(mode) {
     leaderboardContent.innerHTML = '<div class="loading">Loading...</div>';
@@ -1314,4 +1338,225 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ========== MULTIPLAYER FUNCTIONALITY ==========
+
+const WS_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'ws://localhost:3000'
+    : 'wss://snake-game-backend.onrender.com';
+
+let ws = null;
+let currentRoomId = null;
+let multiplayerPlayers = [];
+let isMultiplayer = false;
+
+// DOM elements for multiplayer
+const multiplayerLobby = document.getElementById('multiplayerLobby');
+const createRoomBtn = document.getElementById('createRoomBtn');
+const joinRoomBtn = document.getElementById('joinRoomBtn');
+const roomCodeInput = document.getElementById('roomCodeInput');
+const leaveLobbyBtn = document.getElementById('leaveLobbyBtn');
+const roomInfo = document.getElementById('roomInfo');
+const roomCodeElement = document.getElementById('roomCode');
+const playerCountElement = document.getElementById('playerCount');
+const playerListElement = document.getElementById('playerList');
+const startMultiplayerBtn = document.getElementById('startMultiplayerBtn');
+
+// Handle multiplayer mode selection
+const modeButtons = document.querySelectorAll('.mode-btn');
+modeButtons.forEach(btn => {
+    if (btn.dataset.mode === 'multiplayer') {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showMultiplayerLobby();
+        });
+    }
+});
+
+function showMultiplayerLobby() {
+    modeSelection.style.display = 'none';
+    multiplayerLobby.style.display = 'block';
+    isMultiplayer = true;
+}
+
+createRoomBtn.addEventListener('click', () => {
+    const roomId = generateRoomCode();
+    const playerName = prompt('Enter your name:') || 'Player';
+
+    connectWebSocket();
+
+    ws.onopen = () => {
+        ws.send(JSON.stringify({
+            type: 'CREATE_ROOM',
+            roomId,
+            playerName
+        }));
+    };
+});
+
+joinRoomBtn.addEventListener('click', () => {
+    const roomId = roomCodeInput.value.trim().toUpperCase();
+    if (!roomId) {
+        alert('Please enter a room code');
+        return;
+    }
+
+    const playerName = prompt('Enter your name:') || 'Player';
+
+    connectWebSocket();
+
+    ws.onopen = () => {
+        ws.send(JSON.stringify({
+            type: 'JOIN_ROOM',
+            roomId,
+            playerName
+        }));
+    };
+});
+
+leaveLobbyBtn.addEventListener('click', () => {
+    if (ws) {
+        ws.close();
+        ws = null;
+    }
+    multiplayerLobby.style.display = 'none';
+    modeSelection.style.display = 'block';
+    isMultiplayer = false;
+    currentRoomId = null;
+    roomInfo.style.display = 'none';
+    document.querySelector('.lobby-options').style.display = 'block';
+});
+
+startMultiplayerBtn.addEventListener('click', () => {
+    multiplayerLobby.style.display = 'none';
+    gameScreen.style.display = 'block';
+    currentMode = 'multiplayer';
+    modeDisplay.textContent = '🎮 Multiplayer';
+});
+
+function connectWebSocket() {
+    if (ws && ws.readyState === WebSocket.OPEN) return;
+
+    ws = new WebSocket(WS_URL);
+
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        handleWebSocketMessage(data);
+    };
+
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        alert('Failed to connect to multiplayer server');
+    };
+
+    ws.onclose = () => {
+        console.log('WebSocket closed');
+    };
+}
+
+function handleWebSocketMessage(data) {
+    switch (data.type) {
+        case 'ROOM_CREATED':
+            currentRoomId = data.roomId;
+            roomCodeElement.textContent = data.roomId;
+            document.querySelector('.lobby-options').style.display = 'none';
+            roomInfo.style.display = 'block';
+            break;
+
+        case 'PLAYER_JOINED':
+            playerCountElement.textContent = data.playerCount;
+            updatePlayerList(data.players);
+            playSound('powerup');
+            break;
+
+        case 'PLAYER_LEFT':
+            playerCountElement.textContent = data.playerCount;
+            break;
+
+        case 'POSITIONS_UPDATE':
+            multiplayerPlayers = data.players;
+            break;
+
+        case 'SCORE_UPDATE':
+            console.log(`${data.playerName} scored ${data.score}`);
+            break;
+
+        case 'PLAYER_GAME_OVER':
+            console.log(`${data.playerName} game over! Final score: ${data.finalScore}`);
+            break;
+
+        case 'ERROR':
+            alert(data.message);
+            break;
+    }
+}
+
+function updatePlayerList(players) {
+    playerListElement.innerHTML = players.map(p =>
+        `<div class="player-item">👤 ${escapeHtml(p.name)} - Score: ${p.score}</div>`
+    ).join('');
+}
+
+function generateRoomCode() {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+// Send position updates during multiplayer game
+const originalUpdate = update;
+function updateMultiplayer() {
+    originalUpdate();
+
+    if (isMultiplayer && ws && ws.readyState === WebSocket.OPEN && gameRunning) {
+        ws.send(JSON.stringify({
+            type: 'UPDATE_POSITION',
+            roomId: currentRoomId,
+            position: snake
+        }));
+
+        ws.send(JSON.stringify({
+            type: 'UPDATE_SCORE',
+            roomId: currentRoomId,
+            score: score
+        }));
+    }
+}
+
+// Override update function for multiplayer
+if (typeof update === 'function') {
+    update = updateMultiplayer;
+}
+
+// Draw other players in multiplayer
+function drawMultiplayerPlayers() {
+    if (!isMultiplayer) return;
+
+    const colors = ['#ff6b6b', '#4ecdc4', '#ffe66d', '#95e1d3'];
+
+    multiplayerPlayers.forEach((player, index) => {
+        if (player.position && player.position.length > 0) {
+            player.position.forEach((segment, i) => {
+                ctx.fillStyle = colors[index % colors.length];
+                ctx.globalAlpha = 0.6;
+                ctx.fillRect(segment.x * GRID_SIZE, segment.y * GRID_SIZE, GRID_SIZE - 2, GRID_SIZE - 2);
+                ctx.globalAlpha = 1.0;
+            });
+
+            // Draw player name
+            if (player.position[0]) {
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Arial';
+                ctx.fillText(player.name, player.position[0].x * GRID_SIZE, player.position[0].y * GRID_SIZE - 5);
+            }
+        }
+    });
+}
+
+// Add multiplayer rendering to draw function
+const originalDraw = draw;
+if (typeof originalDraw === 'function') {
+    draw = function() {
+        originalDraw();
+        drawMultiplayerPlayers();
+    };
 }

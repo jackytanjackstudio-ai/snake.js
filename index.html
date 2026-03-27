@@ -65,7 +65,32 @@
                     <span class="mode-name">Zen Mode</span>
                     <span class="mode-desc">No walls, pure flow</span>
                 </button>
+                <button class="mode-btn" data-mode="multiplayer">
+                    <span class="mode-icon">👥</span>
+                    <span class="mode-name">Multiplayer</span>
+                    <span class="mode-desc">Play with friends online</span>
+                </button>
             </div>
+        </div>
+
+        <!-- Multiplayer Lobby Screen -->
+        <div id="multiplayerLobby" class="multiplayer-lobby" style="display:none;">
+            <h2>🎮 Multiplayer Lobby</h2>
+            <div id="lobbyContent" class="lobby-content">
+                <div class="lobby-options">
+                    <button id="createRoomBtn" class="lobby-btn">Create New Room</button>
+                    <div class="or-divider">OR</div>
+                    <input type="text" id="roomCodeInput" placeholder="Enter Room Code" maxlength="6" />
+                    <button id="joinRoomBtn" class="lobby-btn">Join Room</button>
+                </div>
+                <div id="roomInfo" style="display:none;">
+                    <h3>Room: <span id="roomCode"></span></h3>
+                    <p>Players in room: <span id="playerCount">1</span>/4</p>
+                    <div id="playerList"></div>
+                    <button id="startMultiplayerBtn" class="lobby-btn">Start Game</button>
+                </div>
+            </div>
+            <button id="leaveLobbyBtn" class="close-settings-btn">Back to Menu</button>
         </div>
 
         <!-- Leaderboard Screen -->

@@ -1,9 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const { WebSocketServer } = require('ws');
+const http = require('http');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const server = http.createServer(app);
 
 // Middleware - CORS configuration for Vercel frontend
 const corsOptions = {
@@ -245,8 +248,183 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// WebSocket Server for Multiplayer
+const wss = new WebSocketServer({ server });
+
+// Game rooms storage
+const gameRooms = new Map();
+
+wss.on('connection', (ws) => {
+    console.log('🎮 New player connected');
+
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
+            handleMessage(ws, data);
+        } catch (error) {
+            console.error('WebSocket message error:', error);
+        }
+    });
+
+    ws.on('close', () => {
+        console.log('👋 Player disconnected');
+        handleDisconnect(ws);
+    });
+});
+
+function handleMessage(ws, data) {
+    const { type, roomId, playerName, position, score } = data;
+
+    switch (type) {
+        case 'CREATE_ROOM':
+            createRoom(ws, roomId, playerName);
+            break;
+        case 'JOIN_ROOM':
+            joinRoom(ws, roomId, playerName);
+            break;
+        case 'UPDATE_POSITION':
+            updatePosition(ws, roomId, position);
+            break;
+        case 'UPDATE_SCORE':
+            updateScore(ws, roomId, score);
+            break;
+        case 'GAME_OVER':
+            handleGameOver(ws, roomId);
+            break;
+    }
+}
+
+function createRoom(ws, roomId, playerName) {
+    if (gameRooms.has(roomId)) {
+        ws.send(JSON.stringify({ type: 'ERROR', message: 'Room already exists' }));
+        return;
+    }
+
+    gameRooms.set(roomId, {
+        players: [{ ws, name: playerName, score: 0, position: [] }],
+        createdAt: Date.now()
+    });
+
+    ws.roomId = roomId;
+    ws.send(JSON.stringify({
+        type: 'ROOM_CREATED',
+        roomId,
+        playerName
+    }));
+
+    console.log(`🏠 Room ${roomId} created by ${playerName}`);
+}
+
+function joinRoom(ws, roomId, playerName) {
+    const room = gameRooms.get(roomId);
+
+    if (!room) {
+        ws.send(JSON.stringify({ type: 'ERROR', message: 'Room not found' }));
+        return;
+    }
+
+    if (room.players.length >= 4) {
+        ws.send(JSON.stringify({ type: 'ERROR', message: 'Room is full' }));
+        return;
+    }
+
+    room.players.push({ ws, name: playerName, score: 0, position: [] });
+    ws.roomId = roomId;
+
+    // Notify all players in room
+    broadcastToRoom(roomId, {
+        type: 'PLAYER_JOINED',
+        playerName,
+        playerCount: room.players.length,
+        players: room.players.map(p => ({ name: p.name, score: p.score }))
+    });
+
+    console.log(`🎮 ${playerName} joined room ${roomId}`);
+}
+
+function updatePosition(ws, roomId, position) {
+    const room = gameRooms.get(roomId);
+    if (!room) return;
+
+    const player = room.players.find(p => p.ws === ws);
+    if (player) {
+        player.position = position;
+
+        // Broadcast positions to all other players
+        broadcastToRoom(roomId, {
+            type: 'POSITIONS_UPDATE',
+            players: room.players.map(p => ({
+                name: p.name,
+                position: p.position,
+                score: p.score
+            }))
+        }, ws);
+    }
+}
+
+function updateScore(ws, roomId, score) {
+    const room = gameRooms.get(roomId);
+    if (!room) return;
+
+    const player = room.players.find(p => p.ws === ws);
+    if (player) {
+        player.score = score;
+
+        broadcastToRoom(roomId, {
+            type: 'SCORE_UPDATE',
+            playerName: player.name,
+            score
+        });
+    }
+}
+
+function handleGameOver(ws, roomId) {
+    const room = gameRooms.get(roomId);
+    if (!room) return;
+
+    const player = room.players.find(p => p.ws === ws);
+    if (player) {
+        broadcastToRoom(roomId, {
+            type: 'PLAYER_GAME_OVER',
+            playerName: player.name,
+            finalScore: player.score
+        });
+    }
+}
+
+function handleDisconnect(ws) {
+    if (ws.roomId) {
+        const room = gameRooms.get(ws.roomId);
+        if (room) {
+            room.players = room.players.filter(p => p.ws !== ws);
+
+            if (room.players.length === 0) {
+                gameRooms.delete(ws.roomId);
+                console.log(`🏠 Room ${ws.roomId} deleted (empty)`);
+            } else {
+                broadcastToRoom(ws.roomId, {
+                    type: 'PLAYER_LEFT',
+                    playerCount: room.players.length
+                });
+            }
+        }
+    }
+}
+
+function broadcastToRoom(roomId, message, excludeWs = null) {
+    const room = gameRooms.get(roomId);
+    if (!room) return;
+
+    room.players.forEach(player => {
+        if (player.ws !== excludeWs && player.ws.readyState === 1) {
+            player.ws.send(JSON.stringify(message));
+        }
+    });
+}
+
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`🐍 Snake Game Server running on port ${PORT}`);
     console.log(`📊 Leaderboard API ready at http://localhost:${PORT}/api/leaderboard`);
+    console.log(`🎮 WebSocket server ready for multiplayer`);
 });
