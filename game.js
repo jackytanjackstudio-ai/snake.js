@@ -78,6 +78,40 @@ const themes = {
 let audioContext;
 let soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
 
+// Achievements
+let achievements = JSON.parse(localStorage.getItem('snakeAchievements') || '{}');
+let achievementQueue = [];
+
+const achievementsList = {
+    firstFood: { name: 'First Bite', desc: 'Eat your first food', icon: '🍎' },
+    score100: { name: 'Century', desc: 'Score 100 points', icon: '💯' },
+    score500: { name: 'High Roller', desc: 'Score 500 points', icon: '🎯' },
+    score1000: { name: 'Master', desc: 'Score 1000 points', icon: '👑' },
+    combo5: { name: 'Combo King', desc: 'Get a 5x combo', icon: '🔥' },
+    allPowerups: { name: 'Powered Up', desc: 'Collect all power-up types', icon: '⚡' },
+    allModes: { name: 'Jack of All Games', desc: 'Play all 4 game modes', icon: '🎮' },
+    allThemes: { name: 'Fashion Forward', desc: 'Try all 5 themes', icon: '🎨' },
+    speedDemon: { name: 'Speed Demon', desc: 'Score 300+ in Time Attack', icon: '⚡' },
+    survivor: { name: 'True Survivor', desc: 'Score 500+ in Survival', icon: '❤️' },
+    zenMaster: { name: 'Zen Master', desc: 'Score 1000+ in Zen mode', icon: '🧘' },
+    noDeath10: { name: 'Perfect Ten', desc: 'Eat 10 food without dying', icon: '✨' },
+    snake50: { name: 'Long Boi', desc: 'Grow to 50 segments', icon: '🐍' }
+};
+
+// Statistics
+let stats = JSON.parse(localStorage.getItem('snakeStats') || JSON.stringify({
+    totalGames: 0,
+    totalScore: 0,
+    totalFood: 0,
+    totalDeaths: 0,
+    powerupsCollected: {},
+    modesPlayed: {},
+    themesUsed: {},
+    bestCombo: 0,
+    longestSnake: 0,
+    perfectGames: 0
+}));
+
 // Particle system
 let particles = [];
 let scorePopups = [];
@@ -143,6 +177,51 @@ class ScorePopup {
         ctx.font = 'bold 20px Arial';
         ctx.textAlign = 'center';
         ctx.fillText('+' + this.value, this.x, this.y + this.offsetY);
+        ctx.restore();
+    }
+}
+
+class AchievementNotification {
+    constructor(achievement) {
+        this.achievement = achievement;
+        this.life = 180; // 3 seconds
+        this.y = -100;
+        this.targetY = 60;
+    }
+
+    update() {
+        this.life--;
+        if (this.y < this.targetY) {
+            this.y += (this.targetY - this.y) * 0.1;
+        }
+        if (this.life < 60) {
+            this.y -= 2;
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, this.life / 60);
+
+        // Background
+        ctx.fillStyle = 'rgba(102, 126, 234, 0.95)';
+        ctx.fillRect(canvas.width / 2 - 150, this.y, 300, 60);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(canvas.width / 2 - 150, this.y, 300, 60);
+
+        // Icon
+        ctx.font = '30px Arial';
+        ctx.fillText(this.achievement.icon, canvas.width / 2 - 120, this.y + 40);
+
+        // Text
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('Achievement Unlocked!', canvas.width / 2 - 80, this.y + 25);
+        ctx.font = '14px Arial';
+        ctx.fillText(this.achievement.name, canvas.width / 2 - 80, this.y + 45);
+
         ctx.restore();
     }
 }
@@ -253,6 +332,16 @@ function drawGame() {
         // Play sound
         playSound('eat');
 
+        // Update stats
+        stats.totalFood++;
+        if (stats.totalFood === 1) unlockAchievement('firstFood');
+        if (combo > stats.bestCombo) stats.bestCombo = combo;
+        if (snake.length > stats.longestSnake) stats.longestSnake = snake.length;
+        localStorage.setItem('snakeStats', JSON.stringify(stats));
+
+        // Check achievements
+        checkAchievements();
+
         if (score > highScore) {
             highScore = score;
             highScoreElement.textContent = highScore;
@@ -291,6 +380,12 @@ function drawGame() {
     scorePopups = scorePopups.filter(p => {
         p.update();
         return p.life > 0;
+    });
+
+    // Update achievement notifications
+    achievementQueue = achievementQueue.filter(a => {
+        a.update();
+        return a.life > 0;
     });
 
     // Clear canvas with screen shake
@@ -456,6 +551,9 @@ function drawGame() {
     // Draw power-up indicators
     ctx.restore();
     drawPowerUpIndicators();
+
+    // Draw achievement notifications
+    achievementQueue.forEach(a => a.draw());
 }
 
 function createExplosion(x, y, color) {
@@ -505,6 +603,57 @@ function spawnPowerUp() {
     }, 10000);
 }
 
+function unlockAchievement(key) {
+    if (achievements[key]) return; // Already unlocked
+
+    achievements[key] = true;
+    localStorage.setItem('snakeAchievements', JSON.stringify(achievements));
+
+    const achievement = achievementsList[key];
+    achievementQueue.push(new AchievementNotification(achievement));
+    playSound('powerup');
+}
+
+function checkAchievements() {
+    // Score achievements
+    if (score >= 100 && !achievements.score100) unlockAchievement('score100');
+    if (score >= 500 && !achievements.score500) unlockAchievement('score500');
+    if (score >= 1000 && !achievements.score1000) unlockAchievement('score1000');
+
+    // Combo achievements
+    if (combo >= 5 && !achievements.combo5) unlockAchievement('combo5');
+
+    // Mode achievements
+    if (currentMode === 'timeattack' && score >= 300 && !achievements.speedDemon) {
+        unlockAchievement('speedDemon');
+    }
+    if (currentMode === 'survival' && score >= 500 && !achievements.survivor) {
+        unlockAchievement('survivor');
+    }
+    if (currentMode === 'zen' && score >= 1000 && !achievements.zenMaster) {
+        unlockAchievement('zenMaster');
+    }
+
+    // Snake length
+    if (snake.length >= 50 && !achievements.snake50) unlockAchievement('snake50');
+
+    // Check if all powerups collected
+    const powerupTypes = ['shield', 'ghost', 'speed', 'magnet'];
+    if (powerupTypes.every(type => stats.powerupsCollected[type]) && !achievements.allPowerups) {
+        unlockAchievement('allPowerups');
+    }
+
+    // Check if all modes played
+    if (Object.keys(stats.modesPlayed).length >= 4 && !achievements.allModes) {
+        unlockAchievement('allModes');
+    }
+
+    // Check if all themes used
+    if (Object.keys(stats.themesUsed).length >= 5 && !achievements.allThemes) {
+        unlockAchievement('allThemes');
+    }
+}
+
 function activatePowerUp(type) {
     if (type === 'shield') {
         activePowerUps.shield = 300; // 5 seconds at 60fps
@@ -515,6 +664,10 @@ function activatePowerUp(type) {
     } else if (type === 'magnet') {
         activePowerUps.magnet = 300;
     }
+
+    // Track for achievements
+    stats.powerupsCollected[type] = true;
+    localStorage.setItem('snakeStats', JSON.stringify(stats));
 }
 
 function drawPowerUpIndicators() {
@@ -576,6 +729,12 @@ function gameOver() {
     clearInterval(gameLoop);
     startBtn.textContent = 'Restart Game';
 
+    // Update stats
+    stats.totalGames++;
+    stats.totalScore += score;
+    stats.totalDeaths++;
+    localStorage.setItem('snakeStats', JSON.stringify(stats));
+
     let message = `Game Over!\nScore: ${score}\nHigh Score: ${highScore}`;
     if (currentMode === 'timeattack') {
         message += `\nTime: ${timeLimit}s`;
@@ -585,6 +744,9 @@ function gameOver() {
     if (combo > 1) {
         message += `\nBest Combo: x${combo}`;
     }
+
+    const achievementCount = Object.keys(achievements).length;
+    message += `\n\nAchievements: ${achievementCount}/${Object.keys(achievementsList).length}`;
 
     alert(message);
 }
@@ -602,6 +764,10 @@ function startGame() {
     combo = 0;
     comboTimer = 0;
     comboDisplay.style.display = 'none';
+
+    // Track mode played
+    stats.modesPlayed[currentMode] = true;
+    localStorage.setItem('snakeStats', JSON.stringify(stats));
 
     // Mode-specific initialization
     if (currentMode === 'timeattack') {
@@ -731,6 +897,11 @@ document.querySelectorAll('.theme-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         currentTheme = btn.dataset.theme;
         localStorage.setItem('snakeTheme', currentTheme);
+
+        // Track theme used
+        stats.themesUsed[currentTheme] = true;
+        localStorage.setItem('snakeStats', JSON.stringify(stats));
+        checkAchievements();
 
         // Update active button
         document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
