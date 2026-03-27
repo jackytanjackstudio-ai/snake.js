@@ -1159,7 +1159,7 @@ function handleSwipe() {
 // Leaderboard API Integration
 const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:3000/api'
-    : '/api'; // Use relative path for production
+    : 'https://snake-game-backend.onrender.com/api'; // Render.com backend for Vercel frontend
 
 const leaderboardScreen = document.getElementById('leaderboardScreen');
 const leaderboardContent = document.getElementById('leaderboardContent');
