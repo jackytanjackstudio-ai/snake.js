@@ -15,6 +15,15 @@ let highScore = localStorage.getItem('snakeHighScore') || 0;
 let gameRunning = false;
 let gameLoop;
 
+// Game modes
+let currentMode = 'classic';
+let gameTime = 0;
+let timeLimit = 60; // for time attack
+let lives = 3; // for survival
+let combo = 0;
+let comboTimer = 0;
+let gameSpeed = 150;
+
 // Particle system
 let particles = [];
 let scorePopups = [];
@@ -91,6 +100,27 @@ function drawGame() {
 
     animationFrame++;
 
+    // Update game time for time attack mode
+    if (currentMode === 'timeattack') {
+        gameTime++;
+        const remainingTime = Math.max(0, timeLimit - Math.floor(gameTime / 60));
+        timeDisplay.textContent = '⏱️ ' + remainingTime + 's';
+
+        if (remainingTime === 0) {
+            gameOver();
+            return;
+        }
+    }
+
+    // Update combo timer
+    if (comboTimer > 0) {
+        comboTimer--;
+        if (comboTimer === 0) {
+            combo = 0;
+            comboDisplay.style.display = 'none';
+        }
+    }
+
     // Update power-ups
     for (let key in activePowerUps) {
         if (activePowerUps[key] > 0) {
@@ -98,19 +128,22 @@ function drawGame() {
         }
     }
 
+    // Progressive difficulty in survival mode
+    if (currentMode === 'survival') {
+        gameSpeed = Math.max(50, 150 - Math.floor(score / 50) * 10);
+    }
+
     // Move snake
     const head = { x: snake[0].x + velocity.x, y: snake[0].y + velocity.y };
 
-    // Check wall collision (unless ghost mode active)
-    if (!activePowerUps.ghost) {
+    // Check wall collision (unless ghost mode or zen mode active)
+    if (!activePowerUps.ghost && currentMode !== 'zen') {
         if (head.x < 0 || head.x >= TILE_COUNT || head.y < 0 || head.y >= TILE_COUNT) {
-            createExplosion(head.x * GRID_SIZE + GRID_SIZE / 2, head.y * GRID_SIZE + GRID_SIZE / 2, '#ff0000');
-            addScreenShake(10);
-            gameOver();
+            handleCollision();
             return;
         }
     } else {
-        // Wrap around in ghost mode
+        // Wrap around in ghost/zen mode
         if (head.x < 0) head.x = TILE_COUNT - 1;
         if (head.x >= TILE_COUNT) head.x = 0;
         if (head.y < 0) head.y = TILE_COUNT - 1;
@@ -120,9 +153,7 @@ function drawGame() {
     // Check self collision (unless ghost or shield active)
     if (!activePowerUps.ghost && !activePowerUps.shield) {
         if (snake.some(segment => segment.x === head.x && segment.y === head.y)) {
-            createExplosion(head.x * GRID_SIZE + GRID_SIZE / 2, head.y * GRID_SIZE + GRID_SIZE / 2, '#ff0000');
-            addScreenShake(10);
-            gameOver();
+            handleCollision();
             return;
         }
     }
@@ -142,22 +173,32 @@ function drawGame() {
 
     // Check food collision
     if (head.x === food.x && head.y === food.y) {
-        score += 10;
+        // Update combo
+        combo++;
+        comboTimer = 120; // 2 seconds to keep combo
+        if (combo > 1) {
+            comboDisplay.style.display = 'inline';
+            comboDisplay.textContent = '🔥 x' + combo + ' Combo!';
+        }
+
+        // Calculate score with combo multiplier
+        let points = 10 * Math.min(combo, 5);
+        score += points;
         scoreElement.textContent = score;
 
         // Create particle explosion
-        createExplosion(food.x * GRID_SIZE + GRID_SIZE / 2, food.y * GRID_SIZE + GRID_SIZE / 2, '#00ff00');
+        createExplosion(food.x * GRID_SIZE + GRID_SIZE / 2, food.y * GRID_SIZE + GRID_SIZE / 2, combo > 3 ? '#ffff00' : '#00ff00');
 
         // Create score popup
-        scorePopups.push(new ScorePopup(food.x * GRID_SIZE + GRID_SIZE / 2, food.y * GRID_SIZE + GRID_SIZE / 2, 10));
+        scorePopups.push(new ScorePopup(food.x * GRID_SIZE + GRID_SIZE / 2, food.y * GRID_SIZE + GRID_SIZE / 2, points));
 
         // Add screen shake
-        addScreenShake(3);
+        addScreenShake(combo > 3 ? 5 : 3);
 
         if (score > highScore) {
             highScore = score;
             highScoreElement.textContent = highScore;
-            localStorage.setItem('snakeHighScore', highScore);
+            localStorage.setItem('snakeHighScore_' + currentMode, highScore);
         }
 
         placeFood();
@@ -450,11 +491,40 @@ function placeFood() {
              powerUps.some(p => p.x === food.x && p.y === food.y));
 }
 
+function handleCollision() {
+    createExplosion(snake[0].x * GRID_SIZE + GRID_SIZE / 2, snake[0].y * GRID_SIZE + GRID_SIZE / 2, '#ff0000');
+    addScreenShake(10);
+
+    if (currentMode === 'survival' && lives > 1) {
+        // Lose a life in survival mode
+        lives--;
+        livesDisplay.textContent = '❤️ Lives: ' + lives;
+
+        // Reset snake position
+        snake = [{ x: 10, y: 10 }];
+        velocity = { x: 1, y: 0 };
+        addScreenShake(15);
+    } else {
+        gameOver();
+    }
+}
+
 function gameOver() {
     gameRunning = false;
     clearInterval(gameLoop);
     startBtn.textContent = 'Restart Game';
-    alert(`Game Over! Your score: ${score}`);
+
+    let message = `Game Over!\nScore: ${score}\nHigh Score: ${highScore}`;
+    if (currentMode === 'timeattack') {
+        message += `\nTime: ${timeLimit}s`;
+    } else if (currentMode === 'survival') {
+        message += `\nLives Used: ${3 - lives + 1}`;
+    }
+    if (combo > 1) {
+        message += `\nBest Combo: x${combo}`;
+    }
+
+    alert(message);
 }
 
 function startGame() {
@@ -467,12 +537,31 @@ function startGame() {
     powerUps = [];
     activePowerUps = { shield: 0, ghost: 0, speed: 0, magnet: 0 };
     screenShake = { x: 0, y: 0, intensity: 0 };
+    combo = 0;
+    comboTimer = 0;
+    comboDisplay.style.display = 'none';
+
+    // Mode-specific initialization
+    if (currentMode === 'timeattack') {
+        gameTime = 0;
+        timeDisplay.textContent = '⏱️ ' + timeLimit + 's';
+        gameSpeed = 100; // Faster for time attack
+    } else if (currentMode === 'survival') {
+        lives = 3;
+        livesDisplay.textContent = '❤️ Lives: ' + lives;
+        gameSpeed = 150;
+    } else if (currentMode === 'zen') {
+        gameSpeed = 120; // Medium speed for zen
+    } else {
+        gameSpeed = 150; // Default speed
+    }
+
     placeFood();
     gameRunning = true;
     startBtn.textContent = 'Game Running...';
 
     if (gameLoop) clearInterval(gameLoop);
-    gameLoop = setInterval(drawGame, 150);
+    gameLoop = setInterval(drawGame, gameSpeed);
 }
 
 document.addEventListener('keydown', (e) => {
@@ -504,6 +593,51 @@ document.addEventListener('keydown', (e) => {
 });
 
 startBtn.addEventListener('click', startGame);
+
+// Mode selection
+const modeSelection = document.getElementById('modeSelection');
+const gameScreen = document.getElementById('gameScreen');
+const backBtn = document.getElementById('backBtn');
+const modeDisplay = document.getElementById('modeDisplay');
+const timeDisplay = document.getElementById('timeDisplay');
+const livesDisplay = document.getElementById('livesDisplay');
+const comboDisplay = document.getElementById('comboDisplay');
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        currentMode = btn.dataset.mode;
+        modeSelection.style.display = 'none';
+        gameScreen.style.display = 'block';
+
+        // Update mode display
+        const modeName = btn.querySelector('.mode-name').textContent;
+        modeDisplay.textContent = '🎮 ' + modeName;
+
+        // Show/hide mode-specific UI
+        if (currentMode === 'timeattack') {
+            timeDisplay.style.display = 'inline';
+            livesDisplay.style.display = 'none';
+        } else if (currentMode === 'survival') {
+            livesDisplay.style.display = 'inline';
+            timeDisplay.style.display = 'none';
+        } else {
+            timeDisplay.style.display = 'none';
+            livesDisplay.style.display = 'none';
+        }
+
+        // Load high score for this mode
+        highScore = localStorage.getItem('snakeHighScore_' + currentMode) || 0;
+        highScoreElement.textContent = highScore;
+    });
+});
+
+backBtn.addEventListener('click', () => {
+    gameRunning = false;
+    if (gameLoop) clearInterval(gameLoop);
+    gameScreen.style.display = 'none';
+    modeSelection.style.display = 'block';
+    startBtn.textContent = 'Start Game';
+});
 
 // Mobile touch controls
 const upBtn = document.getElementById('upBtn');

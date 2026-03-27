@@ -9,14 +9,54 @@
 </head>
 <body>
     <div class="game-container">
-        <h1>Snake Game</h1>
-        <div class="score-board">
-            <div>Score: <span id="score">0</span></div>
-            <div>High Score: <span id="highScore">0</span></div>
+        <h1>Snake Game Premium</h1>
+
+        <!-- Mode Selection Screen -->
+        <div id="modeSelection" class="mode-selection">
+            <h2>Select Game Mode</h2>
+            <div class="mode-grid">
+                <button class="mode-btn" data-mode="classic">
+                    <span class="mode-icon">🎮</span>
+                    <span class="mode-name">Classic</span>
+                    <span class="mode-desc">Traditional endless gameplay</span>
+                </button>
+                <button class="mode-btn" data-mode="timeattack">
+                    <span class="mode-icon">⏱️</span>
+                    <span class="mode-name">Time Attack</span>
+                    <span class="mode-desc">60 seconds to max score</span>
+                </button>
+                <button class="mode-btn" data-mode="survival">
+                    <span class="mode-icon">❤️</span>
+                    <span class="mode-name">Survival</span>
+                    <span class="mode-desc">3 lives, increasing speed</span>
+                </button>
+                <button class="mode-btn" data-mode="zen">
+                    <span class="mode-icon">🧘</span>
+                    <span class="mode-name">Zen Mode</span>
+                    <span class="mode-desc">No walls, pure flow</span>
+                </button>
+            </div>
         </div>
-        <canvas id="gameCanvas" width="400" height="400"></canvas>
-        <div class="controls">
-            <button id="startBtn">Start Game</button>
+
+        <!-- Game Screen -->
+        <div id="gameScreen" class="game-screen" style="display:none;">
+            <div class="game-info">
+                <div class="score-board">
+                    <div>Score: <span id="score">0</span></div>
+                    <div>High Score: <span id="highScore">0</span></div>
+                </div>
+                <div class="game-stats">
+                    <span id="modeDisplay"></span>
+                    <span id="timeDisplay" style="display:none;"></span>
+                    <span id="livesDisplay" style="display:none;"></span>
+                    <span id="comboDisplay" style="display:none;"></span>
+                </div>
+            </div>
+            <canvas id="gameCanvas" width="400" height="400"></canvas>
+            <div class="controls">
+                <button id="startBtn">Start Game</button>
+                <button id="backBtn">Back to Menu</button>
+            </div>
         </div>
         <div class="mobile-controls">
             <div class="control-row">
